@@ -1,0 +1,23 @@
+{
+  "name": "tw-project",
+  "version": "1.0.0",
+  "description": "sistema de nutricion",
+  "keywords": [
+    "nutricion"
+  ],
+  "homepage": "https://github.com/Micaela0111/tw-sistema-nutricion#readme",
+  "bugs": {
+    "url": "https://github.com/Micaela0111/tw-sistema-nutricion/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Micaela0111/tw-sistema-nutricion.git"
+  },
+  "license": "MIT",
+  "author": "Micaela Ramos",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
