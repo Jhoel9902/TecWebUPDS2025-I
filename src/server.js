@@ -7,7 +7,7 @@ const port = 3000;
 const db = mysql.createConnection({
   host: 'localhost',
   user: 'root', 
-  password: '9902',
+  password: '',
   database: 'Nutricion'
 });
 
