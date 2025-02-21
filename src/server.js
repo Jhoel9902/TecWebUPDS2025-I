@@ -219,9 +219,10 @@ app.post('/usuarios/:id/sugerencias', (req, res) => {
 });
 
 // Ruta POST para agregar un alimento restringido por condición médica
+
 app.post('/condiciones-medicas/:id/alimentos', (req, res) => {
-  const { id } = req.params;
-  const { alimento_id, restriccion } = req.body;
+  //const { id } = req.params;
+  //const { alimento_id, restriccion } = req.body;
   db.query('CALL PostCondicionAlimento(?, ?, ?)', [id, alimento_id, restriccion], (err, results) => {
     if (err) {
       console.error('Error al agregar el alimento restringido por condición médica:', err);
