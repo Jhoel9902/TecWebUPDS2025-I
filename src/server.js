@@ -73,7 +73,7 @@ app.get('/alimentos', (req, res) => {
       res.json(results[0]); // Retorna la lista de alimentos
     }
   });
-});
+});//-------------------------------------------------------------------------------------------------------------------------------------------------------
 // Ruta GET para obtener todos los alimentos restringidos por una condición médica
 app.get('/condiciones-medicas/:id/alimentos', (req, res) => {
   const { id } = req.params;
@@ -123,7 +123,7 @@ app.get('/planes-alimentacion/:id/detalles', (req, res) => {
   });
 });
 
-// Ruta POST para agregar un nuevo usuario
+// Ruta POST para agregar un nuevo usuario-------------------------------------------------------------------------------------------------------------
 app.post('/usuarios', (req, res) => {
   const { Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura } = req.body;
   db.query('CALL PostUsuario(?, ?, ?, ?, ?, ?)', [Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura], (err, results) => {
@@ -138,6 +138,7 @@ app.post('/usuarios', (req, res) => {
 
 // Ruta POST para agregar un nuevo alimento
 app.post('/alimentos', (req, res) => {
+  console.log("Datos recibidos en el Body:", req.body); //  Depuración
   const { nombre, calorias, carbohidratos, proteinas, grasas, fibra, porcion } = req.body;
   db.query('CALL PostAlimento(?, ?, ?, ?, ?, ?, ?)', [nombre, calorias, carbohidratos, proteinas, grasas, fibra, porcion], (err, results) => {
     if (err) {
@@ -176,7 +177,7 @@ app.post('/usuarios/:id/condiciones', (req, res) => {
   });
 });
 
-// Ruta POST para agregar un nuevo plan de alimentación
+// Ruta POST para agregar un nuevo plan de alimentación---------------------------------------------------------------------------------------------------------------
 app.post('/usuarios/:id/planes-alimentacion', (req, res) => {
   const { id } = req.params;
   const { nombre_plan, observacion } = req.body;
@@ -232,6 +233,137 @@ app.post('/condiciones-medicas/:id/alimentos', (req, res) => {
     }
   });
 });
+
+//Funciones PUT para las tablas: USUARIOS, CONDICIONESMEDICAS, USUARIOCONDICIONES y ALIMENTOS---------------------------------------------------------------------
+// Ruta PUT para actualizar un usuario
+app.put('/usuarios/:id', (req, res) => {
+  const { id } = req.params;
+  const { Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura } = req.body;
+
+  if (!Nombre || !ApellidoPaterno || !ApellidoMaterno || !Sexo || !Peso || !Altura) {
+    return res.status(400).json({ error: 'Todos los campos (Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura) son requeridos' });
+  }
+
+  db.query('CALL UpdateUsuario(?, ?, ?, ?, ?, ?, ?)', [id, Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar el usuario:', err);
+      res.status(500).json({ error: 'Error al actualizar el usuario' });
+    } else {
+      res.json({ message: 'Usuario actualizado correctamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar un alimento
+app.put('/alimentos/:id', (req, res) => {
+  const { id } = req.params;
+  const { nombre, calorias, carbohidratos, proteinas, grasas, fibra, porcion } = req.body;
+
+  if (!nombre || !calorias || !carbohidratos || !proteinas || !grasas || !fibra || !porcion) {
+    return res.status(400).json({ error: 'Todos los campos (nombre, calorías, carbohidratos, proteínas, grasas, fibra, porción) son requeridos' });
+  }
+
+  db.query('CALL UpdateAlimento(?, ?, ?, ?, ?, ?, ?, ?)', [id, nombre, calorias, carbohidratos, proteinas, grasas, fibra, porcion], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar el alimento:', err);
+      res.status(500).json({ error: 'Error al actualizar el alimento' });
+    } else {
+      res.json({ message: 'Alimento actualizado correctamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar una condición médica
+app.put('/condiciones-medicas/:id', (req, res) => {
+  const { id } = req.params;
+  const { nombre, descripcion } = req.body;
+
+  if (!nombre || !descripcion) {
+    return res.status(400).json({ error: 'Los campos (nombre, descripción) son requeridos' });
+  }
+
+  db.query('CALL UpdateCondicionMedica(?, ?)', [id, nombre, descripcion], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar la condición médica:', err);
+      res.status(500).json({ error: 'Error al actualizar la condición médica' });
+    } else {
+      res.json({ message: 'Condición médica actualizada correctamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar la condición médica de un usuario
+app.put('/usuarios/:id/condiciones/:condicionId', (req, res) => {
+  const { id, condicionId } = req.params;
+
+  db.query('CALL UpdateUsuarioCondicion(?, ?)', [id, condicionId], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar la condición médica del usuario:', err);
+      res.status(500).json({ error: 'Error al actualizar la condición médica del usuario' });
+    } else {
+      res.json({ message: 'Condición médica del usuario actualizada correctamente' });
+    }
+  });
+});
+
+//Funciones DELETE para las tablas:  USUARIOS, CONDICIONESMEDICAS, USUARIOCONDICIONES y ALIMENTOS---------------------------------------------------------------------
+// Ruta DELETE para eliminar un usuario
+app.delete('/usuarios/:id', (req, res) => {
+  const { id } = req.params;
+
+  db.query('CALL DeleteUsuario(?)', [id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar el usuario:', err);
+      res.status(500).json({ error: 'Error al eliminar el usuario' });
+    } else {
+      res.json({ message: 'Usuario eliminado correctamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar un alimento
+app.delete('/alimentos/:id', (req, res) => {
+  const { id } = req.params;
+
+  db.query('CALL DeleteAlimento(?)', [id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar el alimento:', err);
+      res.status(500).json({ error: 'Error al eliminar el alimento' });
+    } else {
+      res.json({ message: 'Alimento eliminado correctamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar una condición médica
+app.delete('/condiciones-medicas/:id', (req, res) => {
+  const { id } = req.params;
+
+  db.query('CALL DeleteCondicionMedica(?)', [id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar la condición médica:', err);
+      res.status(500).json({ error: 'Error al eliminar la condición médica' });
+    } else {
+      res.json({ message: 'Condición médica eliminada correctamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar una condición médica de un usuario
+app.delete('/usuarios/:id/condiciones/:condicionId', (req, res) => {
+  const { id, condicionId } = req.params;
+
+  db.query('CALL DeleteUsuarioCondicion(?, ?)', [id, condicionId], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar la condición médica del usuario:', err);
+      res.status(500).json({ error: 'Error al eliminar la condición médica del usuario' });
+    } else {
+      res.json({ message: 'Condición médica del usuario eliminada correctamente' });
+    }
+  });
+});
+
+
 
 // Levantar el servidor en el puerto especificado
 app.listen(port, () => {
