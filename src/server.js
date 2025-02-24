@@ -1,32 +1,12 @@
 // Importar dependencias
+//debe recibir un no haul jaul faul? del servidor
+
 const express = require('express');
-const mysql = require('mysql2');
+//const mysql = require('mysql2*');
 const app = express();
 const port = 3000;
-
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root', 
-  password: '',
-  database: 'Nutricion'
-});
-
-// Conexión a la base de datos
-db.connect((err) => {
-  if (err) {
-    console.error('Error al conectar a la base de datos:', err);
-    return;
-  }
-  console.log('Conectado a la base de datos MySQL');
-});
-
-// Middleware para parsear JSON en el cuerpo de las peticiones
-app.use(express.json());
-
-// Ruta de prueba para asegurarnos de que el servidor está corriendo
-app.get('/', (req, res) => {
-  res.send('¡Servidor de Nutrición funcionando!');
-});
+const db = require('./config/conexion')
+ 
 
 
 // Ruta GET para obtener todos los usuarios
@@ -305,6 +285,62 @@ app.put('/usuarios/:id/condiciones/:condicionId', (req, res) => {
     }
   });
 });
+//funiciones PUT parA las tablas CONDICIONESALIMENTOS, SUGERENCIAS, PLANALIMENTACION Y DETALLE PLAN ----------------------------------------------------------------
+// Ruta PUT para actualizar un plan de alimentación
+app.put('/usuarios/:id/planes-alimentacion/:plan_id', (req, res) => {
+  const { id, plan_id } = req.params;
+  const { nombre_plan, observacion } = req.body;
+  db.query('CALL PutPlanAlimentacion(?, ?, ?, ?)', [id, plan_id, nombre_plan, observacion], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar el plan de alimentación:', err);
+      res.status(500).json({ error: 'Error al actualizar el plan de alimentación' });
+    } else {
+      res.json({ message: 'Plan de alimentación actualizado exitosamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar un detalle del plan de alimentación
+app.put('/planes-alimentacion/:id/detalles/:detalle_id', (req, res) => {
+  const { id, detalle_id } = req.params;
+  const { alimento_id, cantidad, fecha_sugerida } = req.body;
+  db.query('CALL PutDetallePlan(?, ?, ?, ?, ?)', [id, detalle_id, alimento_id, cantidad, fecha_sugerida], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar el detalle del plan de alimentación:', err);
+      res.status(500).json({ error: 'Error al actualizar el detalle del plan de alimentación' });
+    } else {
+      res.json({ message: 'Detalle del plan de alimentación actualizado exitosamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar una sugerencia de alimento para un usuario
+app.put('/usuarios/:id/sugerencias/:sugerencia_id', (req, res) => {
+  const { id, sugerencia_id } = req.params;
+  const { alimento_id, justificacion } = req.body;
+  db.query('CALL PutSugerencia(?, ?, ?, ?)', [id, sugerencia_id, alimento_id, justificacion], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar la sugerencia de alimento:', err);
+      res.status(500).json({ error: 'Error al actualizar la sugerencia de alimento' });
+    } else {
+      res.json({ message: 'Sugerencia de alimento actualizada exitosamente' });
+    }
+  });
+});
+
+// Ruta PUT para actualizar un alimento restringido por condición médica
+app.put('/condiciones-medicas/:id/alimentos/:alimento_id', (req, res) => {
+  const { id, alimento_id } = req.params;
+  const { restriccion } = req.body;
+  db.query('CALL PutCondicionAlimento(?, ?, ?)', [id, alimento_id, restriccion], (err, results) => {
+    if (err) {
+      console.error('Error al actualizar el alimento restringido por condición médica:', err);
+      res.status(500).json({ error: 'Error al actualizar el alimento restringido por condición médica' });
+    } else {
+      res.json({ message: 'Alimento restringido por condición médica actualizado exitosamente' });
+    }
+  });
+});
 
 //Funciones DELETE para las tablas:  USUARIOS, CONDICIONESMEDICAS, USUARIOCONDICIONES y ALIMENTOS---------------------------------------------------------------------
 // Ruta DELETE para eliminar un usuario
@@ -362,6 +398,61 @@ app.delete('/usuarios/:id/condiciones/:condicionId', (req, res) => {
     }
   });
 });
+
+//funiciones DELETE par las tablas CONDICIONESALIMENTOS, SUGERENCIAS, PLANALIMENTACION Y DETALLE PLAN ----------------------------------------------------------------
+// Ruta DELETE para eliminar un plan de alimentación
+app.delete('/usuarios/:id/planes-alimentacion/:plan_id', (req, res) => {
+  const { id, plan_id } = req.params;
+  db.query('CALL DeletePlanAlimentacion(?, ?)', [id, plan_id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar el plan de alimentación:', err);
+      res.status(500).json({ error: 'Error al eliminar el plan de alimentación' });
+    } else {
+      res.json({ message: 'Plan de alimentación eliminado exitosamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar un detalle del plan de alimentación
+app.delete('/planes-alimentacion/:id/detalles/:detalle_id', (req, res) => {
+  const { id, detalle_id } = req.params;
+  db.query('CALL DeleteDetallePlan(?, ?)', [id, detalle_id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar el detalle del plan de alimentación:', err);
+      res.status(500).json({ error: 'Error al eliminar el detalle del plan de alimentación' });
+    } else {
+      res.json({ message: 'Detalle del plan de alimentación eliminado exitosamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar una sugerencia de alimento
+app.delete('/usuarios/:id/sugerencias/:sugerencia_id', (req, res) => {
+  const { id, sugerencia_id } = req.params;
+  db.query('CALL DeleteSugerencia(?, ?)', [id, sugerencia_id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar la sugerencia de alimento:', err);
+      res.status(500).json({ error: 'Error al eliminar la sugerencia de alimento' });
+    } else {
+      res.json({ message: 'Sugerencia de alimento eliminada exitosamente' });
+    }
+  });
+});
+
+// Ruta DELETE para eliminar un alimento restringido por condición médica
+app.delete('/condiciones-medicas/:id/alimentos/:condicion_alimento_id', (req, res) => {
+  const { id, condicion_alimento_id } = req.params;
+  db.query('CALL DeleteCondicionAlimento(?, ?)', [id, condicion_alimento_id], (err, results) => {
+    if (err) {
+      console.error('Error al eliminar el alimento restringido por condición médica:', err);
+      res.status(500).json({ error: 'Error al eliminar el alimento restringido por condición médica' });
+    } else {
+      res.json({ message: 'Alimento restringido por condición médica eliminado exitosamente' });
+    }
+  });
+});
+
+
 
 
 
