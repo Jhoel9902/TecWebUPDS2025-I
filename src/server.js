@@ -8,57 +8,55 @@ const port = 3000;
 const db = require('./config/conexion')
 app.use(express.json());
 
-
-// Función para calcular el TMB
-//edad no calculada correctamente, cambiar la base de datos para que se pueda calcular la edad
-//perdon micaela, tendremos que cambiar la base de datos para que se pueda calcular la edad
+// Función para calcular la TMB usando la fórmula de Mifflin-St Jeor
 function calcularTMB(peso, altura, edad, sexo) {
   // Convertir altura de metros a centímetros
   altura = altura * 100;
-  
-  if (sexo === "Hombre") {
+
+  if (sexo === 1) { // Masculino
     return (10 * peso) + (6.25 * altura) - (5 * edad) + 5;
-  } else {
+  } else if (sexo === 0) { // Femenino
     return (10 * peso) + (6.25 * altura) - (5 * edad) - 161;
+  } else {
+    throw new Error('El valor de sexo debe ser 0 (Femenino) o 1 (Masculino)');
   }
 }
 
-// Función para calcular el GET (suponiendo un nivel de actividad moderado = 1.55) 
-//Ojo cambiar el nivel de actividad si es necesario (falta implementar la opción para que el usuario pueda elegir su nivel de actividad)
-//Niveles de actividad: Sedentario (1.2), Ligero (1.375), Moderado (1.55), Activo (1.725), Muy activo (1.9)
-function calcularGET(tmb) {
-  return tmb * 1.55;
+// Función para calcular el GET (Gasto Energético Total) según el nivel de actividad
+function calcularGET(tmb, nivelActividad) {
+  const factoresActividad = {
+    sedentario: 1.2,
+    ligero: 1.375,
+    moderado: 1.55,
+    activo: 1.725,
+    muyActivo: 1.9,
+  };
+
+  if (!factoresActividad[nivelActividad]) {
+    throw new Error('Nivel de actividad no válido');
+  }
+
+  return tmb * factoresActividad[nivelActividad];
 }
 
-// Endpoint para obtener datos del usuario y calcular TMB y GET
-app.get("/calcular/:usuarioID", async (req, res) => {
-  try {
-    const usuarioID = req.params.usuarioID;
-    const [rows] = await db.query("SELECT * FROM USUARIOS WHERE UsuarioID = ?", [usuarioID]);
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
-
-    const usuario = rows[0];
-    const edad = new Date().getFullYear() - new Date(usuario.FechaRegistro).getFullYear(); // Edad aproximada
-    const tmb = calcularTMB(usuario.Peso, usuario.Altura, edad, usuario.Sexo);
-    const get = calcularGET(tmb);
-
-
-    res.json({ usuario, tmb, get });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error en el servidor" });
-  }
-});
-
-// Endpoint para ingresar objetivo y calcular duración del plan
 app.post("/objetivo", async (req, res) => {
   try {
-    const { usuarioID,  objetivo, kilos } = req.body;
+    const { usuarioID, objetivo, kilos, nivelActividad } = req.body;
 
-    // Obtener TMB y GET del usuario
+    // Validar valores de entrada
+    if (!usuarioID || !objetivo || !kilos || !nivelActividad) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    if (objetivo !== "perder_peso" && objetivo !== "ganar_peso" && objetivo !== "mantener_peso") {
+      return res.status(400).json({ error: "El objetivo debe ser 'perder_peso', 'ganar_peso' o 'mantener_peso'" });
+    }
+
+    if (isNaN(kilos) || kilos <= 0) {
+      return res.status(400).json({ error: "El valor de kilos debe ser un número positivo" });
+    }
+
+    // Obtener datos del usuario
     const [rows] = await db.query("SELECT * FROM USUARIOS WHERE UsuarioID = ?", [usuarioID]);
 
     if (rows.length === 0) {
@@ -66,21 +64,189 @@ app.post("/objetivo", async (req, res) => {
     }
 
     const usuario = rows[0];
-    const edad = new Date().getFullYear() - new Date(usuario.FechaRegistro).getFullYear();
-    const tmb = calcularTMB(usuario.Peso, usuario.Altura, edad, usuario.Sexo);
-    const get = calcularGET(tmb);
+    console.log("Datos del usuario:", usuario); // Depuración
 
-    // Cálculo de duración del plan (Ejemplo: 7000 kcal ≈ 1kg de grasa)
-    const deficitDiario = objetivo === "perder_peso" ? -500 : 500; // Reducimos o aumentamos 500 kcal/día
-    const diasRequeridos = Math.abs(kilos * 7000 / deficitDiario);
+    // Convertir el campo Sexo (Buffer) a número
+    const sexo = usuario.Sexo.readUInt8(0); // Convierte el Buffer a número
+    console.log("Sexo convertido:", sexo); // Depuración
 
-    res.json({ usuario, tmb, get, objetivo, kilos, diasRequeridos, deficitDiario });
+    // Validar el valor de Sexo
+    if (sexo !== 0 && sexo !== 1) {
+      return res.status(400).json({ error: "El valor de Sexo en la base de datos no es válido" });
+    }
+
+    // Calcular la edad a partir de la fecha de nacimiento
+    const fechaNacimiento = new Date(usuario.FechaNacimiento);
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - fechaNacimiento.getFullYear();
+    const mes = hoy.getMonth() - fechaNacimiento.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNacimiento.getDate())) {
+      edad--;
+    }
+
+    // Calcular TMB y GET
+    const tmb = calcularTMB(usuario.Peso, usuario.Altura, edad, sexo); // Usar el valor convertido
+    const get = calcularGET(tmb, nivelActividad);
+
+    // Ajustar el GET según el objetivo
+    let getAjustado;
+    let deficitDiario = 0;
+    let superavitDiario = 0;
+
+    switch (objetivo) {
+      case "perder_peso":
+        deficitDiario = -500; // Déficit de 500 kcal/día
+        getAjustado = get + deficitDiario;
+        break;
+      case "ganar_peso":
+        superavitDiario = 500; // Superávit de 500 kcal/día
+        getAjustado = get + superavitDiario;
+        break;
+      case "mantener_peso":
+        getAjustado = get; // Sin déficit ni superávit
+        break;
+      default:
+        return res.status(400).json({ error: "Objetivo no válido" });
+    }
+
+    // Cálculo de duración del plan (7000 kcal ≈ 1kg de grasa)
+    const diasRequeridos = Math.abs(kilos * 7000 / (objetivo === "perder_peso" ? -500 : 500)) || 0;
+
+    // Respuesta con los resultados
+    res.json({
+      usuario: {
+        ...usuario,
+        Sexo: sexo, // Incluir el valor convertido en la respuesta
+      },
+      tmb: tmb.toFixed(2),  // Redondear a 2 decimales
+      get: get.toFixed(2),   // Redondear a 2 decimales
+      getAjustado: getAjustado.toFixed(2), // GET ajustado según el objetivo
+      objetivo,
+      kilos,
+      diasRequeridos: Math.ceil(diasRequeridos),  // Redondear hacia arriba
+      deficitDiario: objetivo === "perder_peso" ? deficitDiario : 0,
+      superavitDiario: objetivo === "ganar_peso" ? superavitDiario : 0,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error en el servidor" });
   }
 });
  
+
+app.post("/generar-plan", async (req, res) => {
+  try {
+    const { usuarioID, objetivo, kilos, nivelActividad, diasRequeridos, getAjustado } = req.body;
+
+    // 1. Generar manualmente el PlanAlimentacionID
+    const [maxPlanID] = await db.query("SELECT MAX(PlanAlimentacionID) AS maxID FROM PLANALIMENTACION");
+    const planID = maxPlanID[0].maxID ? maxPlanID[0].maxID + 1 : 1; // Si no hay registros, empezar con 1
+
+    // 2. Crear el plan de alimentación
+    const nombrePlan = `Plan ${objetivo.replace("_", " ")}`;
+    await db.query(
+      "INSERT INTO PLANALIMENTACION (PlanAlimentacionID, UsuarioID, NombrePlan, Estado) VALUES (?, ?, ?, ?)",
+      [planID, usuarioID, nombrePlan, "Activo"]
+    );
+
+    // 3. Obtener alimentos permitidos para el usuario
+    const alimentosPermitidos = await obtenerAlimentosPermitidos(usuarioID);
+
+    // 4. Generar detalles del plan para cada día
+    for (let dia = 1; dia <= diasRequeridos; dia++) {
+      const fechaSugerida = new Date();
+      fechaSugerida.setDate(fechaSugerida.getDate() + dia);
+
+      // Distribuir las calorías en comidas
+      const comidas = distribuirCalorias(getAjustado);
+
+      // Seleccionar alimentos para cada comida
+      const detalles = await generarDetallesComida(alimentosPermitidos, comidas);
+
+      // Insertar detalles en DETALLEPLAN
+      for (const detalle of detalles) {
+        // Generar manualmente el DetalleID
+        const [maxDetalleID] = await db.query("SELECT MAX(DetalleID) AS maxID FROM DETALLEPLAN");
+        const detalleID = maxDetalleID[0].maxID ? maxDetalleID[0].maxID + 1 : 1; // Si no hay registros, empezar con 1
+
+        await db.query(
+          "INSERT INTO DETALLEPLAN (DetalleID, PlanID, AlimentoID, Cantidad, FechaSugerida) VALUES (?, ?, ?, ?, ?)",
+          [detalleID, planID, detalle.AlimentoID, detalle.Cantidad, fechaSugerida]
+        );
+      }
+    }
+
+    res.json({
+      message: "Plan de alimentación generado exitosamente",
+      planID,
+      diasRequeridos,
+      getAjustado,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al generar el plan de alimentación" });
+  }
+});
+
+// Función para obtener alimentos permitidos
+async function obtenerAlimentosPermitidos(usuarioID) {
+  const [rows] = await db.query(
+    `SELECT a.* 
+FROM ALIMENTOS a
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM CONDICIONESALIMENTOS ca
+    LEFT JOIN USUARIOCONDICIONES uc ON ca.CondicionMedicaID = uc.CondicionMedicaID
+    WHERE uc.UsuarioID = ? AND ca.AlimentoID = a.AlimentoID
+)`,
+    [usuarioID]
+  );
+  return rows;
+}
+
+// Función para distribuir las calorías en comidas
+function distribuirCalorias(getAjustado) {
+  return {
+    desayuno: getAjustado * 0.25,
+    almuerzo: getAjustado * 0.35,
+    cena: getAjustado * 0.30,
+    snacks: getAjustado * 0.10,
+  };
+}
+
+// Función para generar detalles de comida
+async function generarDetallesComida(alimentosPermitidos, comidas) {
+  const detalles = [];
+
+  // Seleccionar alimentos aleatorios para cada comida
+  for (const [comida, calorias] of Object.entries(comidas)) {
+    const alimentosSeleccionados = seleccionarAlimentos(alimentosPermitidos, calorias);
+    detalles.push(...alimentosSeleccionados);
+  }
+
+  return detalles;
+}
+
+// Función para seleccionar alimentos aleatorios
+function seleccionarAlimentos(alimentosPermitidos, caloriasRequeridas) {
+  const alimentosSeleccionados = [];
+  let caloriasAcumuladas = 0;
+
+  while (caloriasAcumuladas < caloriasRequeridas) {
+    const alimento = alimentosPermitidos[Math.floor(Math.random() * alimentosPermitidos.length)];
+    const cantidad = Math.min(100, (caloriasRequeridas - caloriasAcumuladas) / alimento.Calorias * 100);
+
+    alimentosSeleccionados.push({
+      AlimentoID: alimento.AlimentoID,
+      Cantidad: cantidad,
+    });
+
+    caloriasAcumuladas += alimento.Calorias * (cantidad / 100);
+  }
+
+  return alimentosSeleccionados;
+}
+
 
 // Ruta GET para obtener todos los usuarios
 app.get('/usuarios', async (req, res) => {
@@ -178,8 +344,24 @@ app.get('/planes-alimentacion/:id/detalles', async (req, res) => {
 // Ruta POST para agregar un nuevo usuario
 app.post('/usuarios', async (req, res) => {
   try {
-    const { Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura } = req.body;
-    await db.query('CALL PostUsuario(?, ?, ?, ?, ?, ?)', [Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura]);
+    const { Nombre, ApellidoPaterno, ApellidoMaterno, Sexo, Peso, Altura, FechaNacimiento } = req.body;
+
+    // Validar que el valor de Sexo sea 0 o 1
+    if (Sexo !== 0 && Sexo !== 1) {
+      return res.status(400).json({ error: 'El valor de Sexo debe ser 0 (Femenino) o 1 (Masculino)' });
+    }
+
+    // Llamar al procedimiento almacenado con los parámetros
+    await db.query('CALL PostUsuario(?, ?, ?, ?, ?, ?, ?)', [
+      Nombre,
+      ApellidoPaterno,
+      ApellidoMaterno,
+      Sexo,  // Sexo como BIT (0 o 1)
+      Peso,
+      Altura,
+      FechaNacimiento  // Nuevo campo
+    ]);
+
     res.json({ message: 'Usuario agregado exitosamente' });
   } catch (err) {
     console.error('Error al agregar el usuario:', err);
